@@ -14,7 +14,12 @@ A simple, browser-based tool to convert EPUB files to plain text format. No serv
 
 ### Online (GitHub Pages)
 
-Simply visit the hosted version and start converting!
+1. Go to your GitHub repository Settings
+2. Navigate to "Pages" in the left sidebar
+3. Under "Build and deployment":
+   - Source: Select "GitHub Actions"
+4. The app will automatically deploy when you push changes
+5. Visit your GitHub Pages URL to use the converter
 
 ### Local Usage
 
