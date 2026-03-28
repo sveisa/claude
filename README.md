@@ -1,6 +1,26 @@
 # VPN URL Checker
 
-Checks a list of VPN service URLs for liveness, takes screenshots, extracts page text, and collects WHOIS, DNS, SSL, panel software, and Wayback Machine data. Outputs everything to `output.xlsx`.
+Checks a list of VPN service URLs and outputs `output.xlsx` with the following columns:
+
+| Column | Description |
+|---|---|
+| # | Unique ID (also prefixed on screenshot filenames) |
+| URL | Root domain checked |
+| Status | HTTP status code, or error reason |
+| Page Title | Browser page title |
+| Extracted Text | Full visible body text |
+| Extracted Text (EN) | Auto-translated to English (blank if already English) |
+| Screenshot | Relative path to the PNG (saved in `screenshots/`) |
+| Registrar | Domain registrar from WHOIS |
+| Domain Created | Registration date |
+| IP Address | Resolved A record(s) |
+| Hosting / ASN | Hosting provider / ASN |
+| IP Country | Country the site is hosted in |
+| Wayback Copies | Number of snapshots in the Wayback Machine |
+
+Screenshots are saved as `screenshots/003_xship.top.png` etc. After the run you'll be prompted to optionally mirror any live sites with `wget`.
+
+---
 
 ## Setup (Mac — do this once)
 
@@ -40,7 +60,7 @@ cd claude
 source venv/bin/activate
 ```
 
-**Add your URLs** — open `vpn_checker.py` in any text editor and replace the URLs in the `URLS = [...]` list at the top. One URL per line, in quotes, comma-separated.
+**Add your URLs** — open `vpn_checker.py` in any text editor and replace the URLs in the `URLS = [...]` list at the top. One URL per line, in quotes, comma-separated. Root URLs and full URLs with paths/fragments both work — the script strips everything down to the root domain automatically.
 
 **Run:**
 
