@@ -6,7 +6,9 @@ import os
 import re
 import ssl
 import socket
+import shutil
 import datetime
+import subprocess
 import warnings
 from urllib.parse import urlparse
 
@@ -403,6 +405,7 @@ def main():
                 print(f"  Skipping browser (not live)")
 
             results.append({
+                "id":          i,
                 "url":         url,
                 "status":      status,
                 "final_url":   str(final_url),
@@ -431,6 +434,7 @@ def main():
     ws.title = "VPN URL Check"
 
     columns = [
+        ("#",                     5),
         ("URL",                  45),
         ("Status",               25),
         ("Final URL",            50),
@@ -462,6 +466,7 @@ def main():
 
     for r in results:
         ws.append([
+            r["id"],
             r["url"], r["status"], r["final_url"], r["title"], r["body_text"],
             r["screenshot"], r["panel"], r["registrar"], r["created"], r["expires"],
             r["ip"], r["hosting"], r["ip_country"],
@@ -484,6 +489,58 @@ def main():
     cf   = sum(1 for r in results if "Cloudflare" in r["status"])
     err  = len(results) - live
     print(f"Summary: {live} live ({cf} Cloudflare blocked), {err} errors, {len(results)} total")
+
+    # --- Mirror prompt ---
+    mirror_candidates = [r for r in results if r["status"].split()[0].isdigit()]
+    if mirror_candidates:
+        print("\n--- Sites available to mirror ---")
+        for r in mirror_candidates:
+            label = r["title"] or r["url"]
+            print(f"  {r['id']:>2}.  {r['url']}  ({label})")
+        print("\nEnter IDs to mirror (e.g. 2, 4, 7), or 0 to skip: ", end="", flush=True)
+        try:
+            raw = input().strip()
+        except (EOFError, KeyboardInterrupt):
+            raw = "0"
+
+        if raw and raw != "0":
+            chosen_ids = {int(x) for x in re.split(r"[,\s]+", raw) if x.strip().isdigit()}
+            to_mirror  = [r for r in results if r["id"] in chosen_ids]
+            if not to_mirror:
+                print("No matching IDs found, skipping.")
+            elif not shutil.which("wget"):
+                print("wget not found — install it with: brew install wget")
+            else:
+                mirrors_dir = "./mirrors"
+                os.makedirs(mirrors_dir, exist_ok=True)
+                for r in to_mirror:
+                    host = get_hostname(r["url"])
+                    dest = os.path.join(mirrors_dir, host)
+                    print(f"\nMirroring {r['url']} -> {dest}/")
+                    cmd = [
+                        "wget",
+                        "--mirror",
+                        "--convert-links",
+                        "--adjust-extension",
+                        "--page-requisites",
+                        "--no-parent",
+                        "--wait=1",
+                        "--random-wait",
+                        "--tries=3",
+                        "--timeout=15",
+                        f"--user-agent={HEADERS['User-Agent']}",
+                        "--header=Accept-Language: zh-CN,zh;q=0.9",
+                        "--no-check-certificate",
+                        "-P", dest,
+                        r["url"],
+                    ]
+                    try:
+                        subprocess.run(cmd, check=False)
+                        print(f"  Mirror saved to {dest}/")
+                    except Exception as e:
+                        print(f"  wget failed: {e}")
+        else:
+            print("Skipping mirror.")
 
 
 if __name__ == "__main__":
