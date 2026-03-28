@@ -1,3 +1,67 @@
+# VPN URL Checker
+
+Checks a list of VPN service URLs for liveness, takes screenshots, extracts page text, and collects WHOIS, DNS, SSL, panel software, and Wayback Machine data. Outputs everything to `output.xlsx`.
+
+## Setup (Mac — do this once)
+
+**1. Install prerequisites**
+
+```bash
+brew install wget
+```
+
+If you don't have Homebrew: https://brew.sh
+
+**2. Clone the repo and switch to the right branch**
+
+```bash
+git clone https://github.com/sveisa/claude
+cd claude
+git checkout claude/vpn-url-checker-Qqc38
+```
+
+**3. Create a Python virtual environment and install dependencies**
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install playwright openpyxl requests python-whois dnspython
+python -m playwright install chromium
+```
+
+---
+
+## Running it
+
+**Every time you open a new terminal, activate the environment first:**
+
+```bash
+cd claude
+source venv/bin/activate
+```
+
+**Add your URLs** — open `vpn_checker.py` in any text editor and replace the URLs in the `URLS = [...]` list at the top. One URL per line, in quotes, comma-separated.
+
+**Run:**
+
+```bash
+python vpn_checker.py
+```
+
+Results are saved to `output.xlsx` and screenshots to `screenshots/`. At the end you'll be asked if you want to mirror any live sites with wget — enter their IDs (e.g. `2, 4, 7`) or `0` to skip.
+
+---
+
+## Pulling updates
+
+If the script has been updated:
+
+```bash
+git pull
+```
+
+---
+
 # EPUB to TXT Converter
 
 A simple, browser-based tool to convert EPUB files to plain text format. No server required - everything runs in your browser!
