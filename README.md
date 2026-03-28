@@ -25,7 +25,7 @@ git checkout claude/vpn-url-checker-Qqc38
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install playwright openpyxl requests python-whois dnspython
+pip install playwright openpyxl requests python-whois dnspython deep-translator
 python -m playwright install chromium
 ```
 

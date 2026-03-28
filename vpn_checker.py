@@ -16,6 +16,7 @@ import dns.resolver
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from playwright.sync_api import sync_playwright
+from deep_translator import GoogleTranslator
 
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
@@ -232,6 +233,27 @@ def extract_text(page):
         return f"Text extraction error: {e}"
 
 
+TRANSLATE_MAX_CHARS = 4000  # Google Translate free tier limit per request
+
+def translate_to_english(text):
+    """Translate text to English. Skips if already Latin-script, truncates if long."""
+    if not text or not text.strip():
+        return ""
+    # Check if text is already mostly Latin/ASCII (English, error messages, etc.)
+    sample = text[:300]
+    non_ascii = sum(1 for c in sample if ord(c) > 127)
+    if non_ascii < len(sample) * 0.1:
+        return ""  # already English, no need to duplicate
+    try:
+        chunk = text[:TRANSLATE_MAX_CHARS]
+        translated = GoogleTranslator(source="auto", target="en").translate(chunk)
+        if len(text) > TRANSLATE_MAX_CHARS:
+            translated += f"\n[first {TRANSLATE_MAX_CHARS} chars translated, original is {len(text)} chars]"
+        return translated or ""
+    except Exception as e:
+        return f"[translation error: {e}]"
+
+
 def safe_filename(idx, url):
     name = re.sub(r"[^\w\-.]", "_", url.replace("https://", "").replace("http://", ""))
     return f"{idx:03d}_{name[:100]}.png"
@@ -288,6 +310,7 @@ def main():
 
             title = ""
             body_text = ""
+            body_text_en = ""
             screenshot_filename = ""
 
             do_browser = status.split()[0].isdigit()
@@ -335,6 +358,10 @@ def main():
 
                         body_text = extract_text(page)
 
+                        # Translate
+                        print(f"  Translating...")
+                        body_text_en = translate_to_english(body_text)
+
                         # Screenshot
                         fname = safe_filename(i, url)
                         fpath = os.path.join(SCREENSHOTS_DIR, fname)
@@ -359,10 +386,10 @@ def main():
                 "status":      status,
                 "title":       title,
                 "body_text":   body_text,
+                "body_text_en": body_text_en,
                 "screenshot":  screenshot_filename,
                 "registrar":   whois_data["registrar"],
                 "created":     whois_data["created"],
-                "expires":     whois_data["expires"],
                 "ip":          dns_data["ip"],
                 "hosting":     dns_data["hosting"],
                 "ip_country":  dns_data["ip_country"],
@@ -383,10 +410,10 @@ def main():
         ("Status",               25),
         ("Page Title",           35),
         ("Extracted Text",       80),
+        ("Extracted Text (EN)",  80),
         ("Screenshot",           45),
         ("Registrar",            30),
         ("Domain Created",       15),
-        ("Domain Expires",       15),
         ("IP Address",           18),
         ("Hosting / ASN",        35),
         ("IP Country",           15),
@@ -406,8 +433,8 @@ def main():
     for r in results:
         ws.append([
             r["id"],
-            r["url"], r["status"], r["title"], r["body_text"],
-            r["screenshot"], r["registrar"], r["created"], r["expires"],
+            r["url"], r["status"], r["title"], r["body_text"], r["body_text_en"],
+            r["screenshot"], r["registrar"], r["created"],
             r["ip"], r["hosting"], r["ip_country"],
             r["wayback"],
         ])
