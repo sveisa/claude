@@ -45,6 +45,8 @@ Checks a list of VPN service URLs and outputs `output.xlsx` with the following c
 | Page Title | Browser page title |
 | Extracted Text | Full visible body text |
 | Extracted Text (EN) | Auto-translated to English (blank if already English) |
+| Page Links | Unique link texts found on the page (one per line) |
+| Page Links (EN) | Link texts translated to English (blank if already English) |
 | Screenshot | Relative path to the PNG (saved in `screenshots/`) |
 | Registrar | Domain registrar from WHOIS |
 | Domain Created | Registration date |

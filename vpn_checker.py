@@ -233,6 +233,26 @@ def extract_text(page):
         return f"Text extraction error: {e}"
 
 
+def extract_links(page):
+    """Extract unique non-empty link texts from all anchor elements."""
+    try:
+        texts = page.evaluate("""() => {
+            const seen = new Set();
+            const results = [];
+            document.querySelectorAll('a').forEach(a => {
+                const t = (a.innerText || a.textContent || '').trim();
+                if (t && !seen.has(t)) {
+                    seen.add(t);
+                    results.push(t);
+                }
+            });
+            return results;
+        }""")
+        return "\n".join(texts) if texts else ""
+    except Exception as e:
+        return f"Link extraction error: {e}"
+
+
 TRANSLATE_MAX_CHARS = 4000  # Google Translate free tier limit per request
 
 def translate_to_english(text):
@@ -311,6 +331,8 @@ def main():
             title = ""
             body_text = ""
             body_text_en = ""
+            link_texts = ""
+            link_texts_en = ""
             screenshot_filename = ""
 
             do_browser = status.split()[0].isdigit()
@@ -357,10 +379,12 @@ def main():
                             pass
 
                         body_text = extract_text(page)
+                        link_texts = extract_links(page)
 
                         # Translate
                         print(f"  Translating...")
                         body_text_en = translate_to_english(body_text)
+                        link_texts_en = translate_to_english(link_texts)
 
                         # Screenshot
                         fname = safe_filename(i, url)
@@ -387,6 +411,8 @@ def main():
                 "title":       title,
                 "body_text":   body_text,
                 "body_text_en": body_text_en,
+                "link_texts":  link_texts,
+                "link_texts_en": link_texts_en,
                 "screenshot":  screenshot_filename,
                 "registrar":   whois_data["registrar"],
                 "created":     whois_data["created"],
@@ -411,6 +437,8 @@ def main():
         ("Page Title",           35),
         ("Extracted Text",       80),
         ("Extracted Text (EN)",  80),
+        ("Page Links",           40),
+        ("Page Links (EN)",      40),
         ("Screenshot",           45),
         ("Registrar",            30),
         ("Domain Created",       15),
@@ -434,6 +462,7 @@ def main():
         ws.append([
             r["id"],
             r["url"], r["status"], r["title"], r["body_text"], r["body_text_en"],
+            r["link_texts"], r["link_texts_en"],
             r["screenshot"], r["registrar"], r["created"],
             r["ip"], r["hosting"], r["ip_country"],
             r["wayback"],
