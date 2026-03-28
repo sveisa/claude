@@ -1,5 +1,40 @@
 # VPN URL Checker
 
+## Research Context
+
+This tool was built to support a study mapping the market for illegal or gray-area VPN services targeting Chinese internet users — services that operate in legal ambiguity under China's internet censorship regime (the Great Firewall).
+
+### What we are trying to understand
+
+China prohibits the use of unauthorized VPNs, but a large commercial market for them exists anyway, operating openly enough to run referral programs, sell subscription plans, and maintain branded websites, yet carefully enough to avoid direct government shutdown. This study tries to characterize that market systematically.
+
+**Specific research questions include:**
+
+- **Market structure** — How many services are active at any given time? How fragmented or concentrated is the market? Are the same operators running multiple branded services?
+- **Availability and stability** — How long do these services stay online? Do they go down frequently, rotate domains, or maintain consistent presences? Wayback Machine counts and domain creation dates speak to this.
+- **Self-presentation and legitimacy** — How do these services present themselves? What language do they use to describe their product? Do they invoke legality, safety, privacy? Do they avoid explicit mentions of censorship circumvention? Screenshots and extracted text capture this.
+- **Service claims** — What do they promise (speed, number of nodes, protocols, uptime guarantees)? How do they position themselves relative to competitors?
+- **Infrastructure patterns** — Are services clustered on the same hosting providers, IPs, or panel software? This reveals whether the market is served by a small number of technical operators running many brands, or whether it is genuinely fragmented.
+- **Regulatory navigation** — How do operators signal compliance or non-confrontation with authorities? This might show up in how they name their product, what they don't say, and where they host their infrastructure.
+- **Business model** — Referral codes, affiliate structures, pricing tiers, and payment methods (Alipay, WeChat Pay, crypto) reveal how the commercial ecosystem is organized.
+
+### Why these data points
+
+Each column in the output maps to a research question:
+
+- **Extracted Text + Translation** — primary source material for how services describe themselves; basis for content analysis
+- **Page Title / Screenshot** — branding, visual presentation, legitimacy signals
+- **Status / Wayback Copies** — availability and longevity of individual services
+- **Domain Created / Registrar** — how long operators have been active; whether they use privacy-protecting registrars
+- **IP Address / Hosting / IP Country** — infrastructure clustering; whether services share operators; geopolitical hosting choices
+- **Wayback Copies** — historical footprint; how long a domain has been indexed
+
+### How to brief Claude Code on this project
+
+If returning to this project in a new session, share this README. The scraper is `vpn_checker.py`. Add new URLs to the `URLS = [...]` list at the top — full referral URLs or root domains both work. The script normalises everything to root domains before checking.
+
+---
+
 Checks a list of VPN service URLs and outputs `output.xlsx` with the following columns:
 
 | Column | Description |
