@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """
-VPN URL Checker - liveness, screenshots, text, WHOIS, DNS, SSL, panel detection, Wayback.
+VPN URL Checker - liveness, screenshots, text, WHOIS, DNS, Wayback.
 """
 import os
 import re
-import ssl
-import socket
 import shutil
 import datetime
 import subprocess
@@ -52,16 +50,6 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
     "Accept-Encoding": "gzip, deflate, br",
-}
-
-# Panel software fingerprints: checked against raw HTML source
-PANEL_SIGNATURES = {
-    "V2Board":     ["/api/v1/passport/", "v2board", "V2Board"],
-    "XBoard":      ["xboard", "XBoard", "/api/v1/user/getSubscribe"],
-    "SSPanel-UIM": ["SSPanel", "sspanel", "mu/user"],
-    "WHMCS":       ["whmcs.com", "WHMCS"],
-    "Trojan Panel":["trojan-panel", "trojanpanel"],
-    "Sing-Box":    ["sing-box", "singbox"],
 }
 
 
@@ -148,73 +136,50 @@ def get_dns_and_ip(hostname):
     return result
 
 
-def get_ssl_info(hostname):
-    """Connect on port 443 and extract cert details. Returns dict."""
-    result = {"ssl_issuer": "", "ssl_expiry": "", "ssl_sans": ""}
-    try:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        with socket.create_connection((hostname, 443), timeout=8) as raw:
-            with ctx.wrap_socket(raw, server_hostname=hostname) as s:
-                cert = s.getpeercert()
-        if not cert:
-            return result
-
-        # Issuer
-        issuer = dict(x[0] for x in cert.get("issuer", []))
-        result["ssl_issuer"] = issuer.get("organizationName") or issuer.get("commonName") or ""
-
-        # Expiry
-        not_after = cert.get("notAfter", "")
-        if not_after:
-            try:
-                dt = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
-                result["ssl_expiry"] = dt.strftime("%Y-%m-%d")
-            except Exception:
-                result["ssl_expiry"] = not_after
-
-        # Subject Alternative Names
-        sans = []
-        for san_type, san_val in cert.get("subjectAltName", []):
-            if san_type == "DNS" and san_val != hostname:
-                sans.append(san_val)
-        result["ssl_sans"] = ", ".join(sans[:10])  # cap at 10
-
-    except Exception:
-        pass
-    return result
-
-
 def get_wayback_count(hostname):
     """Query Wayback CDX API for total snapshot count."""
     try:
+        # Use showNumPages=true with a fixed page size for a fast, reliable count
         resp = requests.get(
             "https://web.archive.org/cdx/search/cdx",
             params={
                 "url": f"{hostname}/*",
                 "output": "json",
                 "fl": "timestamp",
-                "limit": 10000,
-                "matchType": "host",
+                "showNumPages": "true",
+                "pageSize": 100,
             },
-            timeout=12,
+            timeout=20,
         )
-        data = resp.json()
-        # First row is header ["timestamp"]
-        count = max(0, len(data) - 1)
-        return f"{count}+" if count == 9999 else str(count)
+        resp.raise_for_status()
+        text = resp.text.strip()
+        if not text or not text.isdigit():
+            return "0"
+        num_pages = int(text)
+        # Each page has up to 100 results; if >0 pages use exact fetch for small sites
+        if num_pages == 0:
+            return "0"
+        if num_pages <= 20:
+            # Fetch exact count (≤2000 rows)
+            r2 = requests.get(
+                "https://web.archive.org/cdx/search/cdx",
+                params={
+                    "url": f"{hostname}/*",
+                    "output": "json",
+                    "fl": "timestamp",
+                    "limit": 2001,
+                },
+                timeout=20,
+            )
+            r2.raise_for_status()
+            data = r2.json()
+            count = max(0, len(data) - 1)  # subtract header row
+            return f"{count}+" if count == 2000 else str(count)
+        else:
+            approx = num_pages * 100
+            return f"~{approx}"
     except Exception:
         return ""
-
-
-def detect_panel(html):
-    """Detect panel software from raw HTML source."""
-    detected = []
-    for name, sigs in PANEL_SIGNATURES.items():
-        if any(sig in html for sig in sigs):
-            detected.append(name)
-    return ", ".join(detected) if detected else ""
 
 
 # ---------------------------------------------------------------------------
@@ -267,9 +232,9 @@ def extract_text(page):
         return f"Text extraction error: {e}"
 
 
-def safe_filename(url):
+def safe_filename(idx, url):
     name = re.sub(r"[^\w\-.]", "_", url.replace("https://", "").replace("http://", ""))
-    return name[:120] + ".png"
+    return f"{idx:03d}_{name[:100]}.png"
 
 
 # ---------------------------------------------------------------------------
@@ -317,10 +282,6 @@ def main():
             print(f"  DNS/IP...")
             dns_data = get_dns_and_ip(hostname)
 
-            # --- SSL ---
-            print(f"  SSL...")
-            ssl_data = get_ssl_info(hostname)
-
             # --- Wayback ---
             print(f"  Wayback...")
             wayback_count = get_wayback_count(hostname)
@@ -328,7 +289,6 @@ def main():
             title = ""
             body_text = ""
             screenshot_filename = ""
-            panel = ""
 
             do_browser = status.split()[0].isdigit()
 
@@ -369,25 +329,14 @@ def main():
                         wait_for_spa_content(page)
 
                         try:
-                            final_url = page.url
-                        except Exception:
-                            pass
-
-                        try:
                             title = page.title() or ""
                         except Exception:
                             pass
 
                         body_text = extract_text(page)
 
-                        # Panel detection from raw HTML
-                        try:
-                            panel = detect_panel(page.content())
-                        except Exception:
-                            pass
-
                         # Screenshot
-                        fname = safe_filename(url)
+                        fname = safe_filename(i, url)
                         fpath = os.path.join(SCREENSHOTS_DIR, fname)
                         try:
                             page.screenshot(path=fpath, full_page=True, timeout=10000)
@@ -408,20 +357,15 @@ def main():
                 "id":          i,
                 "url":         url,
                 "status":      status,
-                "final_url":   str(final_url),
                 "title":       title,
                 "body_text":   body_text,
                 "screenshot":  screenshot_filename,
-                "panel":       panel,
                 "registrar":   whois_data["registrar"],
                 "created":     whois_data["created"],
                 "expires":     whois_data["expires"],
                 "ip":          dns_data["ip"],
                 "hosting":     dns_data["hosting"],
                 "ip_country":  dns_data["ip_country"],
-                "ssl_issuer":  ssl_data["ssl_issuer"],
-                "ssl_expiry":  ssl_data["ssl_expiry"],
-                "ssl_sans":    ssl_data["ssl_sans"],
                 "wayback":     wayback_count,
             })
             print()
@@ -437,20 +381,15 @@ def main():
         ("#",                     5),
         ("URL",                  45),
         ("Status",               25),
-        ("Final URL",            50),
         ("Page Title",           35),
         ("Extracted Text",       80),
         ("Screenshot",           45),
-        ("Panel Software",       20),
         ("Registrar",            30),
         ("Domain Created",       15),
         ("Domain Expires",       15),
         ("IP Address",           18),
         ("Hosting / ASN",        35),
         ("IP Country",           15),
-        ("SSL Issuer",           30),
-        ("SSL Expiry",           14),
-        ("SSL SANs",             45),
         ("Wayback Copies",       15),
     ]
     headers = [c[0] for c in columns]
@@ -467,10 +406,9 @@ def main():
     for r in results:
         ws.append([
             r["id"],
-            r["url"], r["status"], r["final_url"], r["title"], r["body_text"],
-            r["screenshot"], r["panel"], r["registrar"], r["created"], r["expires"],
+            r["url"], r["status"], r["title"], r["body_text"],
+            r["screenshot"], r["registrar"], r["created"], r["expires"],
             r["ip"], r["hosting"], r["ip_country"],
-            r["ssl_issuer"], r["ssl_expiry"], r["ssl_sans"],
             r["wayback"],
         ])
         for cell in ws[ws.max_row]:
