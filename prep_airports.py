@@ -26,13 +26,23 @@ import zipfile
 import pandas as pd
 
 ZIP_PATH   = "/Users/isakladegaard/airport_reviews_2018-2025.zip"
-URL_PATTERN = re.compile(r'https?://[^\s\u3000\u300a\u300b\uff08\uff09\u3001\u3002"\'<>」【】]+')
+URL_PATTERN    = re.compile(r'https?://[^\s\u3000\u300a\u300b\uff08\uff09\u3001\u3002"\'<>」【】]+')
+TRAILING_JUNK  = re.compile(r'[\])\[,;。，、！？!?]+$')
 
 
 def extract_urls(text):
     if not isinstance(text, str):
         return []
-    return URL_PATTERN.findall(text)
+    raw_matches = URL_PATTERN.findall(text)
+    seen = []
+    for match in raw_matches:
+        # Split markdown-style links: "https://a.com/](https://b.com/)" -> two URLs
+        parts = re.split(r'\]\(', match)
+        for part in parts:
+            clean = TRAILING_JUNK.sub('', part)
+            if clean.startswith("http") and clean not in seen:
+                seen.append(clean)
+    return seen
 
 
 def process_file(path):
