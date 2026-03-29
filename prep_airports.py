@@ -5,6 +5,7 @@ Restructures xlsx files in prepped_airports/:
 - Extracts all http URLs from Content into separate columns
 - Saves as UTF-8 CSV alongside the originals (xlsx untouched)
 """
+import os
 import re
 import glob
 import sys
@@ -60,7 +61,7 @@ def process_file(path):
 
 
 def main():
-    files = sorted(glob.glob(f"{FOLDER}/*.xlsx"))
+    files = sorted(f for f in glob.glob(f"{FOLDER}/*.xlsx") if not os.path.basename(f).startswith("~$"))
     if not files:
         print(f"No xlsx files found in {FOLDER}/")
         sys.exit(1)
