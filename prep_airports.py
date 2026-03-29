@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 Restructures xlsx files in prepped_airports/:
-- Keeps only Date, Url, Content columns (in that order)
+- Keeps Date, Views, Shares, Url, Content columns (in that order)
 - Extracts all http URLs from Content into separate columns
-- Overwrites each file in place
+- Saves as UTF-8 CSV alongside the originals (xlsx untouched)
 """
 import re
 import glob
@@ -23,24 +23,28 @@ def extract_urls(text):
 def process_file(path):
     df = pd.read_excel(path, engine="openpyxl")
 
-    # Case-insensitive column lookup
     col_map = {c.lower(): c for c in df.columns}
-    missing = [name for name in ("date", "url", "content") if name not in col_map]
+    required = ("date", "url", "content")
+    missing = [name for name in required if name not in col_map]
     if missing:
         print(f"  SKIP — missing columns: {missing}")
         return
 
     date_col    = col_map["date"]
+    views_col   = col_map.get("views")
+    shares_col  = col_map.get("shares")
     url_col     = col_map["url"]
     content_col = col_map["content"]
 
-    # Extract URLs from Content
     all_urls = df[content_col].apply(extract_urls)
     max_urls = all_urls.apply(len).max()
 
-    # Build output dataframe
     out = pd.DataFrame()
     out["Date"]    = df[date_col]
+    if views_col:
+        out["Views"]  = df[views_col]
+    if shares_col:
+        out["Shares"] = df[shares_col]
     out["Url"]     = df[url_col]
     out["Content"] = df[content_col]
 
@@ -49,8 +53,10 @@ def process_file(path):
             lambda urls, idx=i: urls[idx] if idx < len(urls) else ""
         )
 
-    out.to_excel(path, index=False, engine="openpyxl")
-    print(f"  OK — {len(out)} rows, {max_urls} extracted URL column(s)")
+    # utf-8-sig adds a BOM so Excel opens Chinese text correctly
+    csv_path = path.replace(".xlsx", ".csv")
+    out.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    print(f"  OK — {len(out)} rows, {max_urls} extracted URL col(s) -> {csv_path}")
 
 
 def main():
