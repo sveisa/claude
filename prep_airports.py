@@ -70,6 +70,17 @@ def main():
         print(f"{path}")
         process_file(path)
 
+    # Merge all CSVs into one
+    csv_files = sorted(glob.glob(f"{FOLDER}/*.csv"))
+    if csv_files:
+        merged = pd.concat(
+            [pd.read_csv(f, encoding="utf-8-sig") for f in csv_files],
+            ignore_index=True
+        )
+        merged_path = f"{FOLDER}/merged.csv"
+        merged.to_csv(merged_path, index=False, encoding="utf-8-sig")
+        print(f"\nMerged {len(csv_files)} files -> {merged_path} ({len(merged)} rows total)")
+
     print("\nDone.")
 
 
