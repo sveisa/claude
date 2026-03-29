@@ -10,7 +10,7 @@ import glob
 import sys
 import pandas as pd
 
-FOLDER = "./prepped_airports"
+FOLDER = "/Users/isakladegaard/prepped_airports"
 URL_PATTERN = re.compile(r'https?://[^\s\u3000\u300a\u300b\uff08\uff09\u3001\u3002"\'<>」【】]+')
 
 
