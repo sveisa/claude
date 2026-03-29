@@ -155,6 +155,65 @@ Change this if your folder has moved. The script skips Excel lock files (`~$*.xl
 
 ---
 
+# Data Cleaning (`data_cleaning.py`)
+
+## What it does
+
+Reads `allyears.csv` and produces two outputs:
+
+1. **`missing.csv`** — for each of the 10 Telegram channels in the `Url` column, finds the min and max post number and lists every integer in that range that is absent from the dataset. Columns: `Missing URL`, `Channel`, `Post ID`, `Nearest Year` (year of the closest known post).
+
+2. **`cleaned_allyears.csv`** — the full dataset after:
+   - Removing rows where `Extracted URL 1` is empty (post had no URLs)
+   - Removing duplicate rows based on `Url` + `Content`
+
+## How to run
+
+```bash
+cd claude
+source venv/bin/activate
+python data_cleaning.py
+```
+
+Input and output paths are hardcoded at the top of `data_cleaning.py`:
+
+```python
+INPUT_PATH     = "/Users/isakladegaard/airport_reviews_2018-2025/allyears.csv"
+OUTPUT_CLEANED = "/Users/isakladegaard/airport_reviews_2018-2025/cleaned_allyears.csv"
+OUTPUT_MISSING = "/Users/isakladegaard/airport_reviews_2018-2025/missing.csv"
+```
+
+---
+
+# Data Files
+
+The two main data files are committed to this branch and can be loaded directly in R:
+
+```r
+allyears <- read.csv(
+  "https://raw.githubusercontent.com/sveisa/claude/claude/vpn-url-checker-Qqc38/allyears.csv",
+  fileEncoding = "UTF-8-BOM"
+)
+
+cleaned <- read.csv(
+  "https://raw.githubusercontent.com/sveisa/claude/claude/vpn-url-checker-Qqc38/cleaned_allyears.csv",
+  fileEncoding = "UTF-8-BOM"
+)
+```
+
+To upload updated versions of the files to GitHub:
+
+```bash
+cp /Users/isakladegaard/airport_reviews_2018-2025/allyears.csv /Users/isakladegaard/claude/
+cp /Users/isakladegaard/airport_reviews_2018-2025/cleaned_allyears.csv /Users/isakladegaard/claude/
+cd /Users/isakladegaard/claude
+git add allyears.csv cleaned_allyears.csv
+git commit -m "Update data files"
+git push
+```
+
+---
+
 # EPUB to TXT Converter
 
 A simple, browser-based tool to convert EPUB files to plain text format. No server required - everything runs in your browser!
