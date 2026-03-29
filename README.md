@@ -119,6 +119,42 @@ git pull
 
 ---
 
+# Airport Data Cleaner (`prep_airports.py`)
+
+## What it does
+
+Cleans and restructures a folder of raw `.xlsx` files scraped from Chinese social media (likely WeChat or similar), each containing posts about VPN/airport services. For each file it:
+
+1. Keeps only: `Date`, `Views`, `Shares`, `Url`, `Content`
+2. Extracts all `http`/`https` URLs from the `Content` text into separate columns (`Extracted URL 1`, `Extracted URL 2`, …)
+3. Saves a cleaned `.csv` next to each `.xlsx` (originals untouched)
+4. Merges all CSVs into a single `merged.csv`
+
+Output CSVs use `utf-8-sig` encoding (with BOM) so Excel on Mac opens Chinese text correctly.
+
+## How to run
+
+```bash
+cd claude
+source venv/bin/activate
+python prep_airports.py
+```
+
+The folder path is hardcoded at the top of `prep_airports.py`:
+
+```python
+FOLDER = "/Users/isakladegaard/prepped_airports"
+```
+
+Change this if your folder has moved. The script skips Excel lock files (`~$*.xlsx`) automatically.
+
+## Output
+
+- `1.csv`, `2.csv`, … — one per input xlsx, in the same folder
+- `merged.csv` — all files stacked vertically, in the same folder
+
+---
+
 # EPUB to TXT Converter
 
 A simple, browser-based tool to convert EPUB files to plain text format. No server required - everything runs in your browser!
