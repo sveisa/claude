@@ -95,54 +95,48 @@ def find_missing_posts(df):
 BITLY_PATTERN = re.compile(r'https?://bit\.ly/\S+', re.IGNORECASE)
 _resolve_cache = {}
 
+BITLY_TOKEN = os.environ.get("BITLY_TOKEN", "")
+
 def resolve_bitly(url):
     """
-    Resolve a bit.ly URL to its destination.
-    1. Try direct HEAD/GET follow — works if link is still active
-    2. If unchanged (dead link), try Wayback Machine CDX to find the
-       earliest recorded redirect destination
+    Resolve a bit.ly URL using the Bitly API (works for dead links too).
+    Falls back to direct redirect if no API token is set.
     """
     url = url.rstrip(")],.")
     if url in _resolve_cache:
         return _resolve_cache[url]
 
-    resolved = url  # default: unchanged
+    resolved = url
 
-    # --- Try direct redirect ---
-    for method in ("head", "get"):
+    # --- Try Bitly API first (works even for dead links) ---
+    if BITLY_TOKEN:
         try:
-            fn = getattr(requests, method)
-            resp = fn(url, allow_redirects=True, timeout=8,
-                      headers={"User-Agent": "Mozilla/5.0"}, stream=(method == "get"))
-            if resp.url != url:
-                resolved = resp.url
-                break
-        except Exception:
-            continue
-
-    # --- If still unchanged, try Wayback Machine ---
-    if resolved == url:
-        try:
-            cdx = requests.get(
-                "https://web.archive.org/cdx/search/cdx",
-                params={
-                    "url": url,
-                    "output": "json",
-                    "fl": "timestamp,statuscode,location",
-                    "filter": "statuscode:301|302",
-                    "limit": 1,
-                    "from": "20150101",
-                },
-                timeout=10,
+            # Extract the bit.ly ID from the URL
+            bitly_id = url.split("bit.ly/")[-1].split("/")[0]
+            resp = requests.get(
+                f"https://api-ssl.bitly.com/v4/bitlinks/bit.ly/{bitly_id}",
+                headers={"Authorization": f"Bearer {BITLY_TOKEN}"},
+                timeout=8,
             )
-            rows = cdx.json()
-            # rows[0] is header, rows[1] is first result
-            if len(rows) > 1:
-                location = rows[1][2]  # 'location' field
-                if location and location.startswith("http"):
-                    resolved = location
+            if resp.status_code == 200:
+                long_url = resp.json().get("long_url", "")
+                if long_url:
+                    resolved = long_url
         except Exception:
             pass
+
+    # --- Fall back to direct redirect if API didn't work ---
+    if resolved == url:
+        for method in ("head", "get"):
+            try:
+                fn = getattr(requests, method)
+                resp = fn(url, allow_redirects=True, timeout=8,
+                          headers={"User-Agent": "Mozilla/5.0"}, stream=(method == "get"))
+                if resp.url != url:
+                    resolved = resp.url
+                    break
+            except Exception:
+                continue
 
     _resolve_cache[url] = resolved
     return resolved
