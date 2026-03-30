@@ -100,13 +100,16 @@ BITLY_TOKEN = os.environ.get("BITLY_TOKEN", "da9a3c2f8126e9c264785f2e9426eff0b81
 
 
 def load_cache():
-    """Load previously resolved URLs from disk."""
+    """Load previously resolved URLs from disk, skipping unchanged entries so they get retried."""
     global _resolve_cache
     if os.path.exists(CACHE_FILE):
         import json
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
-            _resolve_cache = json.load(f)
-        print(f"  Loaded {len(_resolve_cache)} cached resolutions from {CACHE_FILE}")
+            raw = json.load(f)
+        # Only keep entries that were actually resolved (value != key)
+        _resolve_cache = {k: v for k, v in raw.items() if v != k}
+        skipped = len(raw) - len(_resolve_cache)
+        print(f"  Loaded {len(_resolve_cache)} resolved, skipping {skipped} unchanged (will retry)")
 
 
 def save_cache():
@@ -128,13 +131,17 @@ def resolve_bitly(url):
 
     resolved = url
 
-    # --- Try Bitly API first (works even for dead links) ---
+    # --- Try Bitly API (POST /v4/expand works for any bit.ly link) ---
     if BITLY_TOKEN:
         try:
             bitly_id = url.split("bit.ly/")[-1].split("/")[0]
-            resp = requests.get(
-                f"https://api-ssl.bitly.com/v4/bitlinks/bit.ly/{bitly_id}",
-                headers={"Authorization": f"Bearer {BITLY_TOKEN}"},
+            resp = requests.post(
+                "https://api-ssl.bitly.com/v4/expand",
+                headers={
+                    "Authorization": f"Bearer {BITLY_TOKEN}",
+                    "Content-Type": "application/json",
+                },
+                json={"bitlink_id": f"bit.ly/{bitly_id}"},
                 timeout=8,
             )
             if resp.status_code == 200:
