@@ -3,12 +3,15 @@
 Cleans allyears.csv:
 
 1. Finds missing Telegram post numbers per channel -> missing.csv
-2. Removes rows where the first URL column (Extracted URL 1) is empty
-3. Removes duplicate rows (based on Url + Content)
-4. Saves result as cleaned_allyears.csv
+2. Resolves bit.ly links to real URLs; stores originals in bitly_orig column
+3. Removes rows where the first URL column (Extracted URL 1) is empty
+4. Removes duplicate rows (based on Url + Content)
+5. Saves result as cleaned_allyears.csv
 """
 import os
 import re
+import bisect
+import requests
 import pandas as pd
 
 INPUT_PATH      = "/Users/isakladegaard/airport_reviews_2018-2025/allyears.csv"
@@ -64,7 +67,6 @@ def find_missing_posts(df):
         known_ids = sorted(present)
         for gap_id in gaps:
             # Binary-search nearest neighbour
-            import bisect
             idx = bisect.bisect_left(known_ids, gap_id)
             candidates = []
             if idx < len(known_ids):
@@ -84,6 +86,84 @@ def find_missing_posts(df):
         print(f"  {channel}: posts {min_id}–{max_id}, {len(gaps)} gap(s)")
 
     return pd.DataFrame(missing_rows)
+
+
+# ---------------------------------------------------------------------------
+# Step 2: Resolve bit.ly links
+# ---------------------------------------------------------------------------
+
+BITLY_PATTERN = re.compile(r'https?://bit\.ly/\S+', re.IGNORECASE)
+_resolve_cache = {}
+
+def resolve_bitly(url):
+    """Follow redirects on a bit.ly URL and return the final destination."""
+    url = url.rstrip(")],.")   # strip any trailing punctuation
+    if url in _resolve_cache:
+        return _resolve_cache[url]
+    try:
+        resp = requests.head(url, allow_redirects=True, timeout=8,
+                             headers={"User-Agent": "Mozilla/5.0"})
+        resolved = resp.url
+    except Exception:
+        try:
+            # HEAD sometimes blocked; fall back to GET
+            resp = requests.get(url, allow_redirects=True, timeout=8,
+                                headers={"User-Agent": "Mozilla/5.0"}, stream=True)
+            resolved = resp.url
+        except Exception:
+            resolved = url   # leave unchanged if unreachable
+    _resolve_cache[url] = resolved
+    return resolved
+
+
+def expand_bitly_in_df(df):
+    """
+    Scan every Extracted URL column for bit.ly links.
+    Replace each with its resolved URL in-place.
+    Collect original bit.ly URLs into a new 'bitly_orig' column (comma-separated).
+    """
+    url_cols = [c for c in df.columns if c.startswith("Extracted URL")]
+    if not url_cols:
+        print("  No Extracted URL columns found, skipping.")
+        return df
+
+    # Gather all unique bit.ly URLs first so we can show total count
+    all_bitly = set()
+    for col in url_cols:
+        for val in df[col].dropna():
+            for m in BITLY_PATTERN.findall(str(val)):
+                all_bitly.add(m.rstrip(")],." ))
+
+    if not all_bitly:
+        print("  No bit.ly links found.")
+        return df
+
+    print(f"  Found {len(all_bitly)} unique bit.ly link(s) — resolving...")
+
+    # Resolve with progress counter
+    for i, url in enumerate(sorted(all_bitly), 1):
+        resolved = resolve_bitly(url)
+        status = "unchanged" if resolved == url else resolved
+        print(f"  [{i}/{len(all_bitly)}] {url} -> {status}")
+
+    # Apply replacements and collect originals per row
+    bitly_orig_col = []
+    for _, row in df.iterrows():
+        row_originals = []
+        for col in url_cols:
+            val = str(row[col]) if pd.notna(row[col]) else ""
+            matches = BITLY_PATTERN.findall(val)
+            for m in matches:
+                clean = m.rstrip(")],.")
+                resolved = _resolve_cache.get(clean, clean)
+                row_originals.append(clean)
+                df.at[row.name, col] = val.replace(m, resolved)
+        bitly_orig_col.append(", ".join(row_originals) if row_originals else "")
+
+    df.insert(df.columns.get_loc("Extracted URL 1"), "bitly_orig", bitly_orig_col)
+    resolved_count = sum(1 for v in bitly_orig_col if v)
+    print(f"  Resolved bit.ly links in {resolved_count} rows; originals stored in 'bitly_orig'")
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -108,9 +188,12 @@ def main():
     else:
         print("  No missing posts found.")
 
-    # --- Step 2: Remove rows with empty first URL column ---
-    print("\n── Step 2: Remove rows with no extracted URLs ───────────")
-    # Find the first 'Extracted URL' column
+    # --- Step 2: Resolve bit.ly links ---
+    print("\n── Step 2: Resolving bit.ly links ───────────────────────")
+    df = expand_bitly_in_df(df)
+
+    # --- Step 3: Remove rows with empty first URL column ---
+    print("\n── Step 3: Remove rows with no extracted URLs ───────────")
     url_cols = [c for c in df.columns if c.startswith("Extracted URL")]
     if not url_cols:
         print("  No 'Extracted URL' columns found, skipping.")
@@ -121,8 +204,8 @@ def main():
         dropped = before - len(df)
         print(f"  Removed {dropped} rows where '{first_url_col}' was empty ({len(df)} remain)")
 
-    # --- Step 3: Remove duplicates ---
-    print("\n── Step 3: Remove duplicates (Url + Content) ────────────")
+    # --- Step 4: Remove duplicates ---
+    print("\n── Step 4: Remove duplicates (Url + Content) ────────────")
     before = len(df)
     df = df.drop_duplicates(subset=["Url", "Content"], keep="first")
     dropped = before - len(df)
