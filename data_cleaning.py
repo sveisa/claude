@@ -93,14 +93,34 @@ def find_missing_posts(df):
 # ---------------------------------------------------------------------------
 
 BITLY_PATTERN = re.compile(r'https?://bit\.ly/\S+', re.IGNORECASE)
+CACHE_FILE    = "/Users/isakladegaard/airport_reviews_2018-2025/bitly_cache.json"
 _resolve_cache = {}
 
 BITLY_TOKEN = os.environ.get("BITLY_TOKEN", "")
+
+
+def load_cache():
+    """Load previously resolved URLs from disk."""
+    global _resolve_cache
+    if os.path.exists(CACHE_FILE):
+        import json
+        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            _resolve_cache = json.load(f)
+        print(f"  Loaded {len(_resolve_cache)} cached resolutions from {CACHE_FILE}")
+
+
+def save_cache():
+    """Save resolved URLs to disk."""
+    import json
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(_resolve_cache, f, ensure_ascii=False, indent=2)
+
 
 def resolve_bitly(url):
     """
     Resolve a bit.ly URL using the Bitly API (works for dead links too).
     Falls back to direct redirect if no API token is set.
+    Saves to disk cache after each resolution so progress survives interruptions.
     """
     url = url.rstrip(")],.")
     if url in _resolve_cache:
@@ -111,7 +131,6 @@ def resolve_bitly(url):
     # --- Try Bitly API first (works even for dead links) ---
     if BITLY_TOKEN:
         try:
-            # Extract the bit.ly ID from the URL
             bitly_id = url.split("bit.ly/")[-1].split("/")[0]
             resp = requests.get(
                 f"https://api-ssl.bitly.com/v4/bitlinks/bit.ly/{bitly_id}",
@@ -139,6 +158,7 @@ def resolve_bitly(url):
                 continue
 
     _resolve_cache[url] = resolved
+    save_cache()  # persist after every resolution
     return resolved
 
 
@@ -148,6 +168,8 @@ def expand_bitly_in_df(df):
     Replace each with its resolved URL in-place.
     Collect original bit.ly URLs into a new 'bitly_orig' column (comma-separated).
     """
+    load_cache()
+
     url_cols = [c for c in df.columns if c.startswith("Extracted URL")]
     if not url_cols:
         print("  No Extracted URL columns found, skipping.")
