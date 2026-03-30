@@ -96,22 +96,54 @@ BITLY_PATTERN = re.compile(r'https?://bit\.ly/\S+', re.IGNORECASE)
 _resolve_cache = {}
 
 def resolve_bitly(url):
-    """Follow redirects on a bit.ly URL and return the final destination."""
-    url = url.rstrip(")],.")   # strip any trailing punctuation
+    """
+    Resolve a bit.ly URL to its destination.
+    1. Try direct HEAD/GET follow — works if link is still active
+    2. If unchanged (dead link), try Wayback Machine CDX to find the
+       earliest recorded redirect destination
+    """
+    url = url.rstrip(")],.")
     if url in _resolve_cache:
         return _resolve_cache[url]
-    try:
-        resp = requests.head(url, allow_redirects=True, timeout=8,
-                             headers={"User-Agent": "Mozilla/5.0"})
-        resolved = resp.url
-    except Exception:
+
+    resolved = url  # default: unchanged
+
+    # --- Try direct redirect ---
+    for method in ("head", "get"):
         try:
-            # HEAD sometimes blocked; fall back to GET
-            resp = requests.get(url, allow_redirects=True, timeout=8,
-                                headers={"User-Agent": "Mozilla/5.0"}, stream=True)
-            resolved = resp.url
+            fn = getattr(requests, method)
+            resp = fn(url, allow_redirects=True, timeout=8,
+                      headers={"User-Agent": "Mozilla/5.0"}, stream=(method == "get"))
+            if resp.url != url:
+                resolved = resp.url
+                break
         except Exception:
-            resolved = url   # leave unchanged if unreachable
+            continue
+
+    # --- If still unchanged, try Wayback Machine ---
+    if resolved == url:
+        try:
+            cdx = requests.get(
+                "https://web.archive.org/cdx/search/cdx",
+                params={
+                    "url": url,
+                    "output": "json",
+                    "fl": "timestamp,statuscode,location",
+                    "filter": "statuscode:301|302",
+                    "limit": 1,
+                    "from": "20150101",
+                },
+                timeout=10,
+            )
+            rows = cdx.json()
+            # rows[0] is header, rows[1] is first result
+            if len(rows) > 1:
+                location = rows[1][2]  # 'location' field
+                if location and location.startswith("http"):
+                    resolved = location
+        except Exception:
+            pass
+
     _resolve_cache[url] = resolved
     return resolved
 
