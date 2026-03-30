@@ -96,7 +96,7 @@ BITLY_PATTERN = re.compile(r'https?://bit\.ly/\S+', re.IGNORECASE)
 CACHE_FILE    = "/Users/isakladegaard/airport_reviews_2018-2025/bitly_cache.json"
 _resolve_cache = {}
 
-BITLY_TOKEN = os.environ.get("BITLY_TOKEN", "")
+BITLY_TOKEN = os.environ.get("BITLY_TOKEN", "da9a3c2f8126e9c264785f2e9426eff0b811e309")
 
 
 def load_cache():
